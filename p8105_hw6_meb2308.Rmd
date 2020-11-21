@@ -78,4 +78,73 @@ Comment on plot...
 
 # Problem 2
 
+This problem uses data on children's birthweights. In the following code chunks, I show the process I used to come up with a linear regression model with the outcome birtweight `btw`. 
+
+1. Load and clean the dataset for regression analysis 
+
+```{r}
+birthweight_df = 
+  read_csv("./data/birthweight.csv") %>% 
+  mutate(
+    mrace = as.character(mrace), 
+    mrace = recode(mrace, "1" = "White", "2" = "Black", "3" = "Asian", "4" = "Puerto Rican", "8" = "Other"),
+    mrace = fct_infreq(mrace),
+    babysex = as.character(babysex),
+    babysex = recode(babysex, "1" = "Male", "2" = "Female"),
+    babysex = fct_infreq(babysex),
+    frace = as.character(frace), 
+    frace = recode(frace, "1" = "White", "2" = "Black", "3" = "Asian", "4" = "Puerto Rican", "9" = "Unknown"),
+    frace = fct_infreq(frace),
+    malform = as.character(malform),
+    malform = recode(malform, "0" = "Absent", "1" = "Present"),
+    malform = fct_infreq(malform)
+    )
+  
+```
+
+2. Look at the data 
+
+I'll first explore the three predictors that have been found to be associated with birthweight in published analyses. 
+
+Birthweight by mother's age at delivery
+
+```{r}
+birthweight_df %>% 
+  ggplot(aes(x = momage, y = bwt, color = mrace)) +
+  geom_point()
+```
+
+
+Birthweight by average number of cigarettes smoked per day during pregnancy
+
+```{r}
+birthweight_df %>% 
+  ggplot(aes(x = smoken, y = bwt, color = mrace)) +
+  geom_point()
+```
+Based on these plots, it looks like race and mom's age at birth may have a linear relationship with birthweight, so I will fit a linear model using both of those predictors. 
+
+```{r}
+fit = lm(bwt ~ momage + mrace, data = birthweight_df)
+```
+
+```{r}
+fit %>% 
+  broom::glance()
+```
+
+```{r}
+fit %>% 
+  broom::tidy() %>% 
+  select(term, estimate, p.value) %>% 
+  mutate(term = str_replace(term, "momage", "Mom's Age at Birth")) %>% 
+  mutate(term = str_replace(term, "mrace", "Race: ")) %>% 
+  knitr::kable(digits = 3)
+```
+
+
+
+Now I will compare my model to two others
+* length at birth and gestational age as predictors (main effects only)
+* head circumference, length, sex, and all interactions between these  three
 
