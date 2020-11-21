@@ -1,0 +1,81 @@
+---
+title: "P8105 Homework 6 Solutions"
+author: Meghan Bellerose
+date: November 21, 2020
+output:
+    html_document:
+    toc: true
+    toc_float: true
+    code_folding: hide
+---
+
+```{r}
+library(tidyverse)
+
+knitr::opts_chunk$set(
+  fig.width = 6,
+  fig.asp = .6,
+  out.width = "90%"
+)
+
+theme_set(theme_minimal() + theme(legend.position = "bottom"))
+
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis"
+)
+
+scale_colour_discrete = scale_colour_viridis_d
+scale_fill_discrete = scale_fill_viridis_d
+
+set.seed(1)
+```
+
+# Problem 1
+
+
+```{r}
+homicides_df = 
+  read_csv("data/homicide-data.csv") %>% 
+  unite("city_state", city:state, sep = ", ", remove = TRUE) %>% 
+  mutate(
+    resolved = as.numeric(disposition == "Closed by arrest"),
+    victim_age = as.numeric(victim_age),
+    victim_race = fct_relevel(victim_race, "White")) %>% 
+  filter(city_state != c("Tulsa, AL", "Dallas, TX", "Kansas City, MO", "Phoenix, AZ")) %>% 
+  select(city_state, resolved, victim_age, victim_race, victim_sex)
+```
+
+```{r}
+baltimore_df = 
+  homicides_df %>% 
+  filter(city_state == "Baltimore, MD")
+```
+
+```{r}
+fit_logistic = 
+  baltimore_df %>% 
+  glm(resolved ~ victim_age + victim_race + victim_sex, data = ., family = binomial()) 
+```
+
+```{r}
+fit_logistic %>% 
+  broom::tidy() %>% 
+  mutate(OR = exp(estimate)) %>%
+  select(term, log_OR = estimate, OR, p.value) %>% 
+  knitr::kable(digits = 3)
+```
+
+```{r}
+baltimore_df %>% 
+  modelr::add_predictions(fit_logistic) %>% 
+  mutate(fitted_prob = boot::inv.logit(pred))
+```
+Here is a plot showing the estimated ORs and CIs for each city. 
+
+
+Comment on plot...
+
+# Problem 2
+
+
