@@ -80,7 +80,9 @@ Comment on plot...
 
 This problem uses data on children's birthweights. In the following code chunks, I show the process I used to come up with a linear regression model with the outcome birtweight `btw`. 
 
-1. Load and clean the dataset for regression analysis 
+#### Fitting a model
+
+**1. Load and clean the dataset for regression analysis** 
 
 ```{r}
 birthweight_df = 
@@ -102,7 +104,7 @@ birthweight_df =
   
 ```
 
-2. Look at the data 
+**2. Look at the data**
 
 I'll first explore the three predictors that have been found to be associated with birthweight in published analyses. 
 
@@ -122,6 +124,9 @@ birthweight_df %>%
   ggplot(aes(x = smoken, y = bwt, color = mrace)) +
   geom_point()
 ```
+
+**3. Fit data**
+
 Based on these plots, it looks like race and mom's age at birth may have a linear relationship with birthweight, so I will fit a linear model using both of those predictors. 
 
 ```{r}
@@ -142,9 +147,51 @@ fit %>%
   knitr::kable(digits = 3)
 ```
 
+**4. Add residuals**
+
+```{r}
+birthweight_df %>% 
+  modelr::add_residuals(fit) %>% 
+  ggplot(aes(x = mrace, y = resid)) +
+  geom_violin()
+
+birthweight_df %>% 
+  modelr::add_residuals(fit) %>% 
+  ggplot(aes(x = momage, y = resid)) +
+  geom_point() +
+  facet_wrap(. ~ mrace)
+```
+
+```{r}
+modelr::add_predictions(birthweight_df, fit)
+```
+**5. Make plot of modeled residuals against fitted values**
 
 
-Now I will compare my model to two others
-* length at birth and gestational age as predictors (main effects only)
-* head circumference, length, sex, and all interactions between these  three
+
+#### Now I will compare my model to two others
+
+* Length at birth and gestational age as predictors (main effects only)
+* Head circumference, length, sex, and all interactions between these  three
+
+
+
+# Problem 3
+
+This problem uses 2017 Central Park weather data 
+
+```{r}
+weather_df = 
+  rnoaa::meteo_pull_monitors(
+    c("USW00094728"),
+    var = c("PRCP", "TMIN", "TMAX"), 
+    date_min = "2017-01-01",
+    date_max = "2017-12-31") %>%
+  mutate(
+    name = recode(id, USW00094728 = "CentralPark_NY"),
+    tmin = tmin / 10,
+    tmax = tmax / 10) %>%
+  select(name, id, everything())
+```
+
 
