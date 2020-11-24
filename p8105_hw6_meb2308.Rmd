@@ -43,6 +43,7 @@ homicides_df =
     victim_age = as.numeric(victim_age),
     victim_race = fct_relevel(victim_race, "White")) %>% 
   filter(city_state != c("Tulsa, AL", "Dallas, TX", "Kansas City, MO", "Phoenix, AZ")) %>% 
+  filter(victim_race == c("White", "Black")) %>% 
   select(city_state, resolved, victim_age, victim_race, victim_sex)
 ```
 
@@ -61,8 +62,11 @@ fit_logistic =
 ```{r}
 fit_logistic %>% 
   broom::tidy() %>% 
-  mutate(OR = exp(estimate)) %>%
-  select(term, log_OR = estimate, OR, p.value) %>% 
+  mutate(
+    OR = exp(estimate),
+    CI_lower = exp(estimate - 1.96 * std.error),
+    CI_upper = exp(estimate + 1.96 * std.error)) %>%
+  select(term, OR, starts_with("CI"), p.value) %>% 
   knitr::kable(digits = 3)
 ```
 
@@ -71,8 +75,55 @@ baltimore_df %>%
   modelr::add_predictions(fit_logistic) %>% 
   mutate(fitted_prob = boot::inv.logit(pred))
 ```
+
+Try process across cities
+
+```{r}
+fit_logistic_2 = 
+  homicides_df %>% 
+  glm(resolved ~ victim_age + victim_race + victim_sex, data = ., family = binomial()) 
+```
+
+```{r}
+fit_logistic_2 %>% 
+  broom::tidy() %>% 
+  mutate(
+    OR = exp(estimate),
+    CI_lower = exp(estimate - 1.96 * std.error),
+    CI_upper = exp(estimate + 1.96 * std.error)) %>%
+  select(term, OR, starts_with("CI"), p.value) %>% 
+  knitr::kable(digits = 3)
+```
+
+```{r}
+models_results_df = 
+  homicides_df %>% 
+  nest(data = -city_state) %>% 
+  mutate(
+    models = map(.x = data, ~glm(resolved ~ victim_age + victim_race + victim_sex, data = ., family = binomial())), 
+    results = map(models, broom::tidy)
+  ) %>% 
+  select(city_state, results) %>% 
+  unnest(results) %>% 
+  mutate(
+    OR = exp(estimate),
+    CI_lower = exp(estimate - 1.96 * std.error),
+    CI_upper = exp(estimate + 1.96 * std.error)) %>%
+  select(term, OR, starts_with("CI"))
+```
+
+
 Here is a plot showing the estimated ORs and CIs for each city. 
 
+```{r}
+models_results_df %>% 
+  filter(term == "victim_sex") %>% 
+  mutate(city_state - fct_reorder(city_state, OR)) %>% 
+  ggplot(aes(x = city_state, y = OR)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = CI_lower, ymax = CI_upper)) +
+  theme(axis.text.x = element_text(angle = 70, hjust = 1))
+```
 
 Comment on plot...
 
@@ -171,6 +222,7 @@ modelr::add_predictions(birthweight_df, fit)
 
 #### Now I will compare my model to two others
 
+Look at cross validation lecture
 * Length at birth and gestational age as predictors (main effects only)
 * Head circumference, length, sex, and all interactions between these  three
 
@@ -194,4 +246,6 @@ weather_df =
   select(name, id, everything())
 ```
 
+Test with one model fit first before bootstrapping
+from broom tidy, pull values, multiply, and take log
 
