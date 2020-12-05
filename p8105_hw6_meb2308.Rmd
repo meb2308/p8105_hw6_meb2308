@@ -33,74 +33,54 @@ set.seed(1)
 
 # Problem 1
 
-
 ```{r}
-homicides_df = 
-  read_csv("data/homicide-data.csv") %>% 
-  unite("city_state", city:state, sep = ", ", remove = TRUE) %>% 
+homicide_df = 
+  read_csv("./data/homicide-data.csv") %>% 
   mutate(
-    resolved = as.numeric(disposition == "Closed by arrest"),
+    city_state = str_c(city, state, sep = ", "),
     victim_age = as.numeric(victim_age),
-    victim_race = fct_relevel(victim_race, "White")) %>% 
-  filter(city_state != c("Tulsa, AL", "Dallas, TX", "Kansas City, MO", "Phoenix, AZ")) %>% 
-  filter(victim_race == c("White", "Black")) %>% 
-  select(city_state, resolved, victim_age, victim_race, victim_sex)
+    resolution = case_when(
+      disposition == "Closed without arrest" ~ 0,
+      disposition == "Open/No arrest"        ~ 0,
+      disposition == "Closed by arrest"      ~ 1,
+    )
+  ) %>% 
+  filter(city_state != "Tulsa, AL",
+         victim_race %in% c("White", "Black")) %>% 
+  select(city_state, resolution, victim_age, victim_race, victim_sex)
 ```
+
+Start with one city.
 
 ```{r}
 baltimore_df = 
-  homicides_df %>% 
+  homicide_df %>% 
   filter(city_state == "Baltimore, MD")
-```
-
-```{r}
-fit_logistic = 
-  baltimore_df %>% 
-  glm(resolved ~ victim_age + victim_race + victim_sex, data = ., family = binomial()) 
-```
-
-```{r}
-fit_logistic %>% 
+glm(resolution ~ victim_age + victim_race + victim_sex,
+    data = baltimore_df,
+    family = binomial()) %>% 
   broom::tidy() %>% 
   mutate(
     OR = exp(estimate),
     CI_lower = exp(estimate - 1.96 * std.error),
-    CI_upper = exp(estimate + 1.96 * std.error)) %>%
-  select(term, OR, starts_with("CI"), p.value) %>% 
+    CI_upper = exp(estimate + 1.96 * std.error)
+  ) %>% 
+  select(term, OR, starts_with("CI")) %>% 
   knitr::kable(digits = 3)
 ```
 
-```{r}
-baltimore_df %>% 
-  modelr::add_predictions(fit_logistic) %>% 
-  mutate(fitted_prob = boot::inv.logit(pred))
-```
-
-Try process across cities
+Try this across cities.
 
 ```{r}
-fit_logistic_2 = 
-  homicides_df %>% 
-  glm(resolved ~ victim_age + victim_race + victim_sex, data = ., family = binomial()) 
-```
-
-```{r}
-fit_logistic_2 %>% 
-  broom::tidy() %>% 
-  mutate(
-    OR = exp(estimate),
-    CI_lower = exp(estimate - 1.96 * std.error),
-    CI_upper = exp(estimate + 1.96 * std.error)) %>%
-  select(term, OR, starts_with("CI"), p.value) %>% 
-  knitr::kable(digits = 3)
-```
-
-```{r}
-models_results_df = 
-  homicides_df %>% 
+model_results_df = 
+  homicide_df %>% 
   nest(data = -city_state) %>% 
   mutate(
-    models = map(.x = data, ~glm(resolved ~ victim_age + victim_race + victim_sex, data = ., family = binomial())), 
+    models = 
+      map(.x = data, 
+          ~glm(resolution ~ victim_age + victim_race + victim_sex,
+            data = .x,
+            family = binomial())),
     results = map(models, broom::tidy)
   ) %>% 
   select(city_state, results) %>% 
@@ -108,24 +88,22 @@ models_results_df =
   mutate(
     OR = exp(estimate),
     CI_lower = exp(estimate - 1.96 * std.error),
-    CI_upper = exp(estimate + 1.96 * std.error)) %>%
-  select(term, OR, starts_with("CI"))
+    CI_upper = exp(estimate + 1.96 * std.error)
+  ) %>% 
+   select(city_state, term, OR, starts_with("CI"))
 ```
 
-
-Here is a plot showing the estimated ORs and CIs for each city. 
-
 ```{r}
-models_results_df %>% 
-  filter(term == "victim_sex") %>% 
-  mutate(city_state - fct_reorder(city_state, OR)) %>% 
+model_results_df %>% 
+  filter(term == "victim_sexMale") %>% 
+  mutate(city_state = fct_reorder(city_state, OR)) %>% 
   ggplot(aes(x = city_state, y = OR)) +
   geom_point() +
   geom_errorbar(aes(ymin = CI_lower, ymax = CI_upper)) +
-  theme(axis.text.x = element_text(angle = 70, hjust = 1))
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.6))
 ```
 
-Comment on plot...
+This plot shows the adjusted odds ratios and confidence intervals for solving homicides comparing Black victims to white victims in different US cities. We can see that in New York City and Baton Route, the odds of solving a homicide involving a Black American is lower than the odds of solving it for a White American.
 
 # Problem 2
 
