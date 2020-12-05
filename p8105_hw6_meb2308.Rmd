@@ -11,6 +11,8 @@ output:
 
 ```{r}
 library(tidyverse)
+library(modelr)
+library(mgcv)
 
 knitr::opts_chunk$set(
   fig.width = 6,
@@ -168,7 +170,7 @@ birthweight_df %>%
 Based on these plots, it looks like race and mom's age at birth may have a linear relationship with birth weight, so I will fit a linear model using both of those predictors. 
 
 ```{r}
-fit = lm(bwt ~ momage + mrace, data = birthweight_df)
+fit = lm(bwt ~ momage + mrace + momage*mrace, data = birthweight_df)
 ```
 
 ```{r}
@@ -283,7 +285,7 @@ birthweight_df %>%
   ggplot(aes(x = bhead, y = bwt, color = blength)) +
   geom_point() +
   labs(
-    title = "Birthweight by baby head circumference and length (male)",
+    title = "Birthweight by baby head circumference, length, and sex",
     x = "Head circumference (cm)",
     y = "Birth weight (g)") +
   facet_grid(rows = vars(babysex))
@@ -309,34 +311,91 @@ fit_3 %>%
   mutate(term = str_replace(term, "babysex", "")) %>%
   knitr::kable(digits = 3)
 ```
+
 Residuals
 ```{r}
+birthweight_df %>% 
+  modelr::add_residuals(fit_3) %>% 
+  ggplot(aes(x = bhead, y = resid)) +
+  geom_point()
+
 birthweight_df %>% 
   modelr::add_residuals(fit_2) %>% 
   ggplot(aes(x = blength, y = resid)) +
   geom_point()
 
 birthweight_df %>% 
-  modelr::add_residuals(fit_2) %>% 
-  ggplot(aes(x = gaweeks, y = resid)) +
-  geom_point()
+  modelr::add_residuals(fit_3) %>% 
+  ggplot(aes(x = babysex, y = resid)) +
+  geom_violin()
 ```
+
 Predictors
 ```{r}
-modelr::add_predictions(birthweight_df, fit_2)
+modelr::add_predictions(birthweight_df, fit_3)
 ```
+
 Plot
 ```{r}
 birthweight_df %>% 
-  modelr::add_residuals(fit_2) %>%
-  modelr::add_predictions(fit_2) %>% 
+  modelr::add_residuals(fit_3) %>%
+  modelr::add_predictions(fit_3) %>% 
   ggplot(aes(x = pred, y = resid)) + geom_violin()
 ```
 
-
 **Comparison using cross validation**
 
+```{r}
+cv_df = 
+  crossv_mc(birthweight_df, 100) 
+```
 
+```{r}
+cv_df %>% pull(train) %>% .[[1]] %>% as_tibble
+```
+
+```{r}
+cv_df =
+  cv_df %>% 
+  mutate(
+    train = map(train, as_tibble),
+    test = map(test, as_tibble))
+```
+
+```{r}
+cv_df = 
+  cv_df %>% 
+  mutate(
+    fit = map(train, ~lm(bwt ~ momage + mrace, data = .x)),
+    fit_2 = map(train, ~lm(bwt ~ blength + gaweeks, data = .x)),
+    fit_3 = map(train, ~lm(bwt ~ bhead + blength + babysex + bhead*blength + bhead*babysex + blength*babysex + bhead*blength*babysex, data = .x))) %>% 
+  mutate(
+    rmse_fit = map2_dbl(fit, test, ~rmse(model = .x, data = .y)),
+    rmse_fit_2 = map2_dbl(fit_2, test, ~rmse(model = .x, data = .y)),
+    rmse_fit_3 = map2_dbl(fit_3, test, ~rmse(model = .x, data = .y)))
+
+modelnames = c("My Model", "Comparison Model 1", "Comparison Model 2")
+```
+
+Plot prediction error distribution
+
+```{r}
+cv_df %>% 
+  select(starts_with("rmse")) %>% 
+  pivot_longer(
+    everything(),
+    names_to = "model", 
+    values_to = "rmse",
+    names_prefix = "rmse_") %>% 
+  mutate(model = fct_inorder(model)) %>% 
+  ggplot(aes(x = model, y = rmse)) + geom_violin() +
+  labs(
+    y = "RMSE",
+    x = "Model") + 
+  scale_x_discrete(labels = modelnames)
+```
+
+According to the RMSE distribution of the models, Comparison Model 2, which includes interaction terms, best fits the data. My model appears to have the worst fit.
 
 # Problem 3
 
@@ -358,4 +417,25 @@ weather_df =
 
 Test with one model fit first before bootstrapping
 from broom tidy, pull values, multiply, and take log
+
+```{r}
+boot_one = function(df) {
+  sample_frac(df, replace = TRUE)
+}
+
+boot_one = 
+  tibble(
+    strap_number = 1:5000,
+    strap_sample = rerun(5000,boot_one(weather_df))
+  )
+```
+
+```{r}
+bootstrap_result = 
+  boot_one %>% 
+  mutate(
+    model = map(strap_sample = ~lm(tmax ~ tmin, data = .x)),
+    lobf = map(model, broom:tidy)
+  )
+```
 
