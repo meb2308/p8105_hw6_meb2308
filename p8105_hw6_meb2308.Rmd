@@ -107,7 +107,7 @@ This plot shows the adjusted odds ratios and confidence intervals for solving ho
 
 # Problem 2
 
-This problem uses data on children's birthweights. In the following code chunks, I show the process I used to come up with a linear regression model with the outcome birtweight `btw`. 
+This problem uses data on children's birth weights. In the following code chunks, I show the process I used to come up with a linear regression model with the outcome birth weight `btw`. 
 
 #### Fitting a model
 
@@ -135,28 +135,37 @@ birthweight_df =
 
 **2. Look at the data**
 
-I'll first explore the three predictors that have been found to be associated with birthweight in published analyses. 
+I'll first explore three predictors that have been found to be associated with birth weight in published analyses. 
 
-Birthweight by mother's age at delivery
+Birth weight by mother's age at delivery
 
 ```{r}
 birthweight_df %>% 
   ggplot(aes(x = momage, y = bwt, color = mrace)) +
-  geom_point()
+  geom_point() +
+   labs(
+    title = "Baby birthweight by mom age and race",
+    x = "Mother's age",
+    y = "Birth weight (g)",
+    legend = "race")
 ```
-
 
 Birthweight by average number of cigarettes smoked per day during pregnancy
 
 ```{r}
 birthweight_df %>% 
   ggplot(aes(x = smoken, y = bwt, color = mrace)) +
-  geom_point()
+  geom_point() +
+   labs(
+    title = "Baby birthweight by smoking status and race",
+    x = "Average cigarettes smoked per day during pregnancy",
+    y = "Birth weight (g)",
+    legend = "race")
 ```
 
 **3. Fit data**
 
-Based on these plots, it looks like race and mom's age at birth may have a linear relationship with birthweight, so I will fit a linear model using both of those predictors. 
+Based on these plots, it looks like race and mom's age at birth may have a linear relationship with birth weight, so I will fit a linear model using both of those predictors. 
 
 ```{r}
 fit = lm(bwt ~ momage + mrace, data = birthweight_df)
@@ -191,18 +200,141 @@ birthweight_df %>%
   facet_wrap(. ~ mrace)
 ```
 
+The residuals seem to have a fairly consistent distribution, so we will continue with the linear regression model.
+
+
 ```{r}
 modelr::add_predictions(birthweight_df, fit)
 ```
 **5. Make plot of modeled residuals against fitted values**
 
+```{r}
+birthweight_df %>% 
+  modelr::add_residuals(fit) %>%
+  modelr::add_predictions(fit) %>% 
+  ggplot(aes(x = pred, y = resid)) + geom_violin()
+```
 
 
 #### Now I will compare my model to two others
 
-Look at cross validation lecture
-* Length at birth and gestational age as predictors (main effects only)
-* Head circumference, length, sex, and all interactions between these  three
+**Model 1: Length at birth and gestational age as predictors (main effects only)**
+
+Look at the data
+```{r}
+birthweight_df %>% 
+  ggplot(aes(x = blength, y = bwt, color = gaweeks)) +
+  geom_point() +
+  labs(
+    title = "Birthweight by baby length and gestational age",
+    x = "Length at birth (cm)",
+    y = "Birth weight (g)")
+```
+Fit data
+```{r}
+fit_2 = lm(bwt ~ blength + gaweeks, data = birthweight_df)
+```
+
+```{r}
+fit_2 %>% 
+  broom::glance()
+```
+
+```{r}
+fit_2 %>% 
+  broom::tidy() %>% 
+  select(term, estimate, p.value) %>% 
+  mutate(term = str_replace(term, "blength", "Baby length at birth (cm)")) %>% 
+  mutate(term = str_replace(term, "gaweeks", "Gestational age (weeks)")) %>% 
+  knitr::kable(digits = 3)
+```
+Residuals
+```{r}
+birthweight_df %>% 
+  modelr::add_residuals(fit_2) %>% 
+  ggplot(aes(x = blength, y = resid)) +
+  geom_point()
+
+birthweight_df %>% 
+  modelr::add_residuals(fit_2) %>% 
+  ggplot(aes(x = gaweeks, y = resid)) +
+  geom_point()
+```
+
+Predictors
+```{r}
+modelr::add_predictions(birthweight_df, fit_2)
+```
+
+Plot
+```{r}
+birthweight_df %>% 
+  modelr::add_residuals(fit_2) %>%
+  modelr::add_predictions(fit_2) %>% 
+  ggplot(aes(x = pred, y = resid)) + geom_violin()
+```
+
+**Model 2: Head circumference, length, sex, and all interactions between these  three**
+
+Look at the data
+```{r}
+birthweight_df %>%
+  group_by(babysex) %>% 
+  ggplot(aes(x = bhead, y = bwt, color = blength)) +
+  geom_point() +
+  labs(
+    title = "Birthweight by baby head circumference and length (male)",
+    x = "Head circumference (cm)",
+    y = "Birth weight (g)") +
+  facet_grid(rows = vars(babysex))
+
+```
+
+Fit data
+```{r}
+fit_3 = lm(bwt ~ bhead + blength + babysex + bhead*blength + bhead*babysex + blength*babysex + bhead*blength*babysex, data = birthweight_df)
+```
+
+```{r}
+fit_3 %>% 
+  broom::glance()
+```
+
+```{r}
+fit_3 %>% 
+  broom::tidy() %>% 
+  select(term, estimate, p.value) %>% 
+  mutate(term = str_replace(term, "blength", "Baby length at birth (cm)")) %>% 
+  mutate(term = str_replace(term, "bhead", "Baby head circumference (cm)")) %>%
+  mutate(term = str_replace(term, "babysex", "")) %>%
+  knitr::kable(digits = 3)
+```
+Residuals
+```{r}
+birthweight_df %>% 
+  modelr::add_residuals(fit_2) %>% 
+  ggplot(aes(x = blength, y = resid)) +
+  geom_point()
+
+birthweight_df %>% 
+  modelr::add_residuals(fit_2) %>% 
+  ggplot(aes(x = gaweeks, y = resid)) +
+  geom_point()
+```
+Predictors
+```{r}
+modelr::add_predictions(birthweight_df, fit_2)
+```
+Plot
+```{r}
+birthweight_df %>% 
+  modelr::add_residuals(fit_2) %>%
+  modelr::add_predictions(fit_2) %>% 
+  ggplot(aes(x = pred, y = resid)) + geom_violin()
+```
+
+
+**Comparison using cross validation**
 
 
 
