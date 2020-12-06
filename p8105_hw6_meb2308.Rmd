@@ -402,7 +402,7 @@ According to the RMSE distribution of the models, Comparison Model 2, which incl
 This problem uses 2017 Central Park weather data.
 
 First, I'll load and clean the data:
-```{r}
+```{r, message = FALSE, warning = FALSE}
 weather_df = 
   rnoaa::meteo_pull_monitors(
     c("USW00094728"),
@@ -486,6 +486,8 @@ ln_plot =
 
 ln_plot 
 ```
+<br>
+
 The 95% confidence interval for log(beta 0 x log beta 1) is (`r round(quantile(pull(bootstrap_result, ln_b0b1), probs = c(0.025,0.975)), digits = 2)`). 
 
 ```{r}
