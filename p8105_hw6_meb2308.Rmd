@@ -1,7 +1,7 @@
 ---
 title: "P8105 Homework 6 Solutions"
 author: Meghan Bellerose
-date: November 21, 2020
+date: December 5, 2020
 output:
     html_document:
     toc: true
@@ -9,7 +9,7 @@ output:
     code_folding: hide
 ---
 
-```{r}
+```{r, message = FALSE}
 library(tidyverse)
 library(modelr)
 library(mgcv)
@@ -35,7 +35,7 @@ set.seed(1)
 
 # Problem 1
 
-```{r}
+```{r, message = FALSE, warning = FALSE}
 homicide_df = 
   read_csv("./data/homicide-data.csv") %>% 
   mutate(
@@ -115,7 +115,7 @@ This problem uses data on children's birth weights. In the following code chunks
 
 **1. Load and clean the dataset for regression analysis** 
 
-```{r}
+```{r, message = FALSE}
 birthweight_df = 
   read_csv("./data/birthweight.csv") %>% 
   mutate(
@@ -399,8 +399,9 @@ According to the RMSE distribution of the models, Comparison Model 2, which incl
 
 # Problem 3
 
-This problem uses 2017 Central Park weather data 
+This problem uses 2017 Central Park weather data.
 
+First, I'll load and clean the data:
 ```{r}
 weather_df = 
   rnoaa::meteo_pull_monitors(
@@ -415,27 +416,90 @@ weather_df =
   select(name, id, everything())
 ```
 
-Test with one model fit first before bootstrapping
-from broom tidy, pull values, multiply, and take log
+Next, I'll create a simple linear regression model with tmax as the outcome and tmin as a predictor, and test if it's working.
 
 ```{r}
-boot_one = function(df) {
-  sample_frac(df, replace = TRUE)
+lm(tmax ~ tmin, data = weather_df) %>% 
+  broom::tidy() %>% 
+  knitr::kable(digits = 3)
+```
+
+I then estimate bootstrap samples:
+
+```{r}
+boot_sample = function(df) {
+  sample_frac(df, replace = TRUE) %>% 
+    arrange(tmin)
 }
 
-boot_one = 
-  tibble(
-    strap_number = 1:5000,
-    strap_sample = rerun(5000,boot_one(weather_df))
-  )
+boot_sample(weather_df) %>% 
+  ggplot(aes(x = tmin, y = tmax)) + 
+  geom_point(alpha = .5) +
+  stat_smooth(method = "lm")
 ```
+
+```{r}
+boot_straps = 
+  data_frame(
+    strap_number = 1:5000,
+    strap_sample = rerun(5000, boot_sample(weather_df))
+  )
+    
+boot_straps
+```
+
+Then I estimate log(β0∗β1)
 
 ```{r}
 bootstrap_result = 
-  boot_one %>% 
+  boot_straps %>% 
   mutate(
-    model = map(strap_sample = ~lm(tmax ~ tmin, data = .x)),
-    lobf = map(model, broom:tidy)
-  )
+    models = map(strap_sample, ~lm(tmax ~ tmin, data = .x)),
+    tidy_results = map(models, broom::tidy),
+    glance_results = map(models, broom::glance)) %>% 
+  unnest(tidy_results, glance_results) %>% 
+  select(term, estimate, r.squared) %>% 
+  pivot_wider(
+    names_from = term, 
+    values_from = estimate) %>%
+  rename(
+    b0 = `(Intercept)`, 
+    b1 = tmin,
+    r2 = r.squared) %>% 
+  mutate(ln_b0b1 = log(b0*b1)) %>% 
+  select(r2, ln_b0b1)
+
+bootstrap_result
 ```
 
+Finally, I will plot the distribution of estimates and identify the 2.5% and 97.5% quantities.
+
+```{r}
+ln_plot =
+  bootstrap_result %>% 
+  ggplot(aes(x = ln_b0b1)) +
+  geom_histogram() +
+  theme_minimal() +
+  labs(
+    y = "Frequency",
+    x = "Estimate of log(b0*b1)")
+
+ln_plot 
+```
+The 95% confidence interval for log(beta 0 x log beta 1) is (`r round(quantile(pull(bootstrap_result, ln_b0b1), probs = c(0.025,0.975)), digits = 2)`). 
+
+```{r}
+r2_plot = 
+  bootstrap_result %>% 
+  ggplot(aes(x = r2)) +
+  geom_histogram() +
+  theme_minimal() +
+  labs(
+    y = "Frequency",
+    x = "Estimate of R2"
+  )
+
+r2_plot
+```
+
+The 95% confidence interval of R-squared is (`r round(quantile(pull(bootstrap_result, r2), probs = c(0.025,0.975)), digits = 2)`).
